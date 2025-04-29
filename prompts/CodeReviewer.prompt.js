@@ -1,6 +1,24 @@
 import { ChatPromptTemplate } from "@langchain/core/prompts";
-
+import { z } from "zod";
 import { htmlToText } from "html-to-text";
+
+export const code_reviewerSchema = z.object({
+  readability: z.string().describe("readability of provided code"),
+  code_quality: z.string().describe("code quality of provided code"),
+  complexity: z
+    .object({
+      time: z.string().describe("time complexity of provided code"),
+      space: z.string().describe("space complexity of provided code"),
+    })
+    .describe("time and space complexity of provided code"),
+  correctness_and_edge_cases: z
+    .string()
+    .describe("correctness and edge cases handling"),
+  alternative_approaches: z
+    .string()
+    .optional()
+    .describe("alternative optimized approaches if any"),
+});
 
 const promptTemplate = ChatPromptTemplate.fromMessages([
   [
@@ -8,17 +26,19 @@ const promptTemplate = ChatPromptTemplate.fromMessages([
     `
 <task>
   You are an expert Code Reviewer.
-  Your job is to review DSA problem solutions written in code.
+  Your job is to review DSA problem solutions code.
   You must return your review as a JSON object with structured feedback.
 <task>
 
 <input_schema>
   - problem description: string
   - code: string // user code to be reviewed
-  - coding language: string // python, javascript, java, c++
+  - coding language: string // python, javascript, java, cpp
 <input_schema>
 
 <analysis_rules>
+  - analyze the provide problem description and code carefully.
+  - suggest language-specific best practices for the given **coding language**
   - Assess **readability**: 
     - Is the code easy to follow and logically organized?
     - Are variable and function names meaningful?
@@ -44,22 +64,23 @@ const promptTemplate = ChatPromptTemplate.fromMessages([
 
 <response_rules>
   - Output the review as a **JSON object** with the following structure:
-    {
+    {{
       "readability": "string (your feedback)",
       "code_quality": "string (your feedback)",
-      "time_space_complexity": {
+      "time_space_complexity": {{
         "time": "O(...)",
         "space": "O(...)",
         "notes": "string (brief reasoning)"
-      },
+    }},
       "correctness_and_edge_cases": "string (your feedback)", 
-      "alternative_approaches": "string (suggestions, or 'None')", 
-    }
+      "alternative_approaches": "string (suggestions, or 'None')"
+  }}
 
-  - Output should not *exceed 300 words*.
+  - <critical>Do not wrap the JSON object in any other text or code blocks<critical>.
+  - Output should not **exceed 300 words**.
   - Be objective, constructive, focused on improving the solution.
   - Do not provide any code in the response object.
-  - Explain each point in Plain and simple English, avoiding jargon.
+  - Explain each point in Plain and simple English, avoid jargon.
   - Avoid restating the problem or repeating the code.
   - Use bullet points or concise sentences where helpful.
 <response_rules>`,
@@ -68,29 +89,21 @@ const promptTemplate = ChatPromptTemplate.fromMessages([
   ["human", "{text}"],
 ]);
 
-const data = {
-  description:
-    "<p><strong>Problem Statement:</strong></p><p>Given an array nums containing only 0s, 1s, and 2s, your task is to sort the array in ascending order.</p><p><br></p><p><strong>Constraints:</strong></p><ul><li>1 &lt;= nums.length &lt;= 10^5</li><li>nums[i] is either 0, 1, or 2.</li></ul><p><br></p><p><strong>Input Format:</strong></p><ul><li>An integer n representing the size of the array.</li><li>n space-separated integers representing the elements of the array (0s, 1s, and 2s).</li></ul><p><br></p><p><strong>Output Format:</strong></p><ul><li>Output an array representing the sorted array in ascending order.</li></ul><p><br></p><p><strong>Examples:</strong></p><p><em>Input:</em></p><p>Array: 2 0 2 1 1 0</p><p>Output : 0 0 1 1 2 2</p><p><em>Explanation:</em> After sorting the array, the elements are arranged in ascending order: [0, 0, 1, 1, 2, 2].</p>",
-  code: "\nclass Solution {\npublic:\n    vector<int> sortArray(vector<int>& nums) {\n        sort(nums.begin(), nums.end());\n\n        return nums\n    }\n};\n",
-  language: "cpp",
-};
-
 export const getCodeReviewerPrompt = async ({
   code,
   description,
   language,
 }) => {
-  const plainText = htmlToText(data.description, {
-    wordwrap: false, // Prevent unwanted line breaks
+  const plainText = htmlToText(description, {
+    wordwrap: false,
   });
 
-  console.log(plainText);
   return await promptTemplate.invoke({
     text: `
  <input_data>
   - problem description: ${plainText} 
-  - code: ${data.code}
-  - coding language: ${data.language}
+  - code: ${code}
+  - coding language: ${language}
   <input_data>`,
   });
 };
